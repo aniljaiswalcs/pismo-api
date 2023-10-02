@@ -1,0 +1,5 @@
+#!/bin/sh
+
+migrate -database $POSTGRESQL_URL -path db/migrations up
+
+go run main.go
