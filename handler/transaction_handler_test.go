@@ -24,6 +24,11 @@ func (m *MockTransactionRepository) CreateTransaction(ctx context.Context, trans
 	return args.Get(0).(*model.Transaction), args.Error(1)
 }
 
+func (m *MockTransactionRepository) SubtractTransaction(ctx context.Context, transaction model.Transaction) error {
+	args := m.Called(ctx, transaction)
+	return args.Error(0)
+}
+
 func TestCreateTransaction(t *testing.T) {
 	mockRepo := new(MockTransactionRepository)
 
