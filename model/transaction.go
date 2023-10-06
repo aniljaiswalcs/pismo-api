@@ -5,4 +5,11 @@ type Transaction struct {
 	AccountId       uint64  `json:"account_id"`
 	OperationTypeId uint32  `json:"operation_type_id"`
 	Amount          float32 `json:"amount"`
+	Balance         float32 `json:"balance"`
+}
+
+type result struct {
+	AccountId       uint64  `json:"account_id"`
+	OperationTypeId uint32  `json:"operation_type_id"`
+	Balance         float32 `json:"balance"`
 }
