@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"math"
 	"time"
 
 	"github.com/aniljaiswalcs/pismo/model"
@@ -26,7 +25,7 @@ func (t *TransactionRepositoryPostgres) CreateTransaction(ctx context.Context, t
 	ctxTimeout, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
-	query := "INSERT INTO transactions (account_id, operation_type_id, amount) VALUES ($1, $2, $3) RETURNING transaction_id"
+	query := "INSERT INTO transactions (account_id, operation_type_id, amount, balance) VALUES ($1, $2, $3, $3) RETURNING transaction_id"
 	err := t.db.QueryRowContext(
 		ctxTimeout,
 		query,
@@ -47,7 +46,7 @@ func (t *TransactionRepositoryPostgres) CreateTransaction(ctx context.Context, t
 		}
 	}
 	// find the updated transaction valuues
-	transactionId, err := t.FindAccount(ctx, transaction.TransactionId)
+	transactionId, err := t.FindtransactionAccount(ctx, transaction.TransactionId)
 	if err != nil {
 		return nil, err
 	}
@@ -60,8 +59,9 @@ func (t *TransactionRepositoryPostgres) SubtractTransaction(ctx context.Context,
 	defer cancel()
 
 	// fetch amount using account id sort by time;
+	query := "SELECT transaction_id, balance, account_id, operation_type_id FROM transactions WHERE account_id = $1 AND operation_type_id < 4 order by created_at DESC"
 
-	rows, err := t.db.Query("SELECT transaction_id, balance, account_id, operation_type_id FROM transactions WHERE account_id < 4 sort by EventDate DESC")
+	rows, err := t.db.Query(query, transaction.AccountId)
 	if err != nil {
 		fmt.Println(" Error during SubtractTransaction query")
 		return nil
@@ -79,18 +79,18 @@ func (t *TransactionRepositoryPostgres) SubtractTransaction(ctx context.Context,
 		result = append(result, res) // add new row information
 	}
 
-	initialVal := float64(transaction.Amount)
-
+	initialVal := transaction.Amount
 	for index, _ := range result {
-		balance := math.Abs(float64(result[index].Balance))
-		if initialVal-balance > 0 {
-			initialVal -= balance
+		res := result[index].Balance + initialVal
+		if res > 0 {
 			result[index].Balance = 0
-		} else {
+			initialVal = res
+		} else if res <= 0 {
+			initialVal = 0
 			break
 		}
 	}
-	transaction.Balance = float32(initialVal)
+	transaction.Balance = initialVal
 	err = t.UpdateTransactiondatabse(ctxTimeout, result, transaction)
 	if err != nil {
 		fmt.Println(err)
@@ -101,28 +101,28 @@ func (t *TransactionRepositoryPostgres) SubtractTransaction(ctx context.Context,
 
 func (t *TransactionRepositoryPostgres) UpdateTransactiondatabse(ctx context.Context, result []model.Transaction, initialtransaction model.Transaction) error {
 
-	ctxTimeout, cancel := context.WithTimeout(ctx, 2*time.Second)
+	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	query := "update transactions balance VALUES $1 where transaction_id, account_id, operation_type_id VALUES ($2, $3, $4)"
+	query := "UPDATE transactions set balance = $1 where transaction_id = $2 AND account_id = $3 AND operation_type_id = $4"
 
-	for index, _ := range result {
-		err := t.db.QueryRowContext(
+	for _, res := range result {
+		_, err := t.db.ExecContext(
 			ctxTimeout,
 			query,
-			result[index].Balance,
-			result[index].TransactionId,
-			result[index].AccountId,
-			result[index].OperationTypeId)
+			res.Balance,
+			res.TransactionId,
+			res.AccountId,
+			res.OperationTypeId)
 
 		if err != nil {
-			log.Printf("TransactionRepositoryPostgres#CreateTransaction: Database query (%s) failed: %s", query, err)
+			log.Printf("TransactionRepositoryPostgres#UpdateTransaction: Database query (%s) failed: %s", query, err)
 			return nil
 		}
 	}
 
 	// update initial balance
-	err := t.db.QueryRowContext(
+	_, err := t.db.ExecContext(
 		ctxTimeout,
 		query,
 		initialtransaction.Balance,
@@ -138,15 +138,15 @@ func (t *TransactionRepositoryPostgres) UpdateTransactiondatabse(ctx context.Con
 	return nil
 }
 
-func (t *TransactionRepositoryPostgres) FindAccount(ctx context.Context, accountId uint64) (*model.Transaction, error) {
+func (t *TransactionRepositoryPostgres) FindtransactionAccount(ctx context.Context, transactionid uint64) (*model.Transaction, error) {
 
 	ctxTimeout, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
 	transaction := model.Transaction{}
-	query := "SELECT account_id, operation_type_id, amount,balance FROM transactions WHERE transaction_id=$1 LIMIT 1"
-	result := t.db.QueryRowContext(ctxTimeout, query, accountId)
-	err := result.Scan(&transaction.AccountId, &transaction.Amount, &transaction.Balance, &transaction.OperationTypeId, &transaction.TransactionId)
+	query := "SELECT account_id, operation_type_id, amount,balance, transaction_id FROM transactions WHERE transaction_id=$1 LIMIT 1"
+	result := t.db.QueryRowContext(ctxTimeout, query, transactionid)
+	err := result.Scan(&transaction.AccountId, &transaction.OperationTypeId, &transaction.Amount, &transaction.Balance, &transaction.TransactionId)
 	if err != nil {
 		log.Printf("transactionRepositoryPostgres#FindAccount: Database query (%s) failed: %s", query, err)
 

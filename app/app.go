@@ -24,7 +24,8 @@ func Start() {
 	accountHandler := handler.NewAccountHandler(accountRepositoryPostgres)
 	transactionHandler := handler.NewTransactionHandler(transactionRepositoryPostgres)
 
-	port := ":" + os.Getenv("API_PORT")
+	//port := ":" + os.Getenv("API_PORT")
+	port := ":3000"
 
 	router := mux.NewRouter().PathPrefix("/v1").Subrouter()
 
@@ -36,12 +37,12 @@ func Start() {
 	// routes to transaction
 	transactionMux := router.PathPrefix("/transactions").Subrouter()
 	transactionMux.HandleFunc("", transactionHandler.CreateTransaction).Methods("POST")
+	transactionMux.HandleFunc("/{transactionid:[0-9]+}", transactionHandler.GetAccount).Methods("GET")
 
 	fmt.Println("Server: localhost" + port)
 
 	http.Handle("/", router)
-	http.ListenAndServe(port, nil)
-
+	fmt.Println(http.ListenAndServe(port, nil))
 }
 
 func getNewPullConnectionDb() *sql.DB {

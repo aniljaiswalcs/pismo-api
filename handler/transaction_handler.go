@@ -2,13 +2,16 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/aniljaiswalcs/pismo/model"
 	"github.com/aniljaiswalcs/pismo/pkg/lib"
 	"github.com/aniljaiswalcs/pismo/repository"
+	"github.com/gorilla/mux"
 )
 
 type TransactionHandler struct {
@@ -81,4 +84,37 @@ type TransactionPayload struct {
 	AccountId       uint64  `json:"account_id"`
 	OperationTypeId uint32  `json:"operation_type_id"`
 	Amount          float32 `json:"amount"`
+}
+
+func (c *TransactionHandler) GetAccount(w http.ResponseWriter, req *http.Request) {
+
+	newCtx, cancel := context.WithTimeout(req.Context(), 5*time.Second)
+	defer cancel()
+
+	accountIdParam := mux.Vars(req)["transactionid"]
+	accountId, err := strconv.ParseUint(accountIdParam, 10, 64)
+	if err != nil {
+		lib.RenderJSON(w, http.StatusBadRequest, lib.ParsingAccountID)
+		return
+	}
+	if accountId <= 0 {
+		lib.RenderJSON(w, http.StatusBadRequest, lib.AccountIdValidation)
+		return
+	}
+
+	account, err := c.repository.FindtransactionAccount(newCtx, accountId)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			lib.RenderJSON(w, http.StatusNotFound, lib.AccountIdNotFound)
+			return
+		} else if err.Error() == lib.DatabaseTimeoutError || err.Error() == lib.ContextDeadline {
+			lib.RenderJSON(w, http.StatusInternalServerError, lib.TimeoutError)
+			return
+		}
+		lib.RenderJSON(w, http.StatusInternalServerError, lib.DatabaseError)
+		return
+	}
+
+	lib.RenderJSON(w, http.StatusOK, account)
 }

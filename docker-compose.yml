@@ -5,6 +5,7 @@ services:
     image: pismo-api
     ports:
     - "3000:3000"
+    command: "./script/start"
     links:
     - db
     environment:
